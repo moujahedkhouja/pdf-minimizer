@@ -1,0 +1,31 @@
+[package]
+name = "pdf-minimizer"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "pdf_minimizer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pdf-minimizer"
+path = "src/main.rs"
+
+[dependencies]
+lopdf = "0.44"
+flate2 = { version = "1.1.9", default-features = false, features = ["zlib-ng"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "bmp"] }
+clap = { version = "4", features = ["derive"] }
+rayon = "1.10"
+indicatif = { version = "0.18", features = ["rayon"] }
+tempfile = "3"
+mozjpeg = "0.10"
+oxipng = { version = "10", default-features = false }
+image-compare = "0.5"
+zopfli = { version = "0.8", default-features = false, features = ["std", "zlib"] }
+fax = "0.3.0"
+mozjpeg-sys = "2.2.3"
+libc = "0.2.186"
+
+[dev-dependencies]

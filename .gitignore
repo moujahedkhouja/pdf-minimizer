@@ -1,0 +1,6 @@
+/target
+docs/
+.idea/
+/output/
+*.pdf
+*.PDF
