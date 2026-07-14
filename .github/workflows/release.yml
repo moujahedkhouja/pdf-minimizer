@@ -31,7 +31,7 @@ jobs:
             os: windows-11-arm
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # nasm is only required for the x86 SIMD assembly in mozjpeg-sys;
       # aarch64 builds use NEON intrinsics instead
@@ -63,7 +63,7 @@ jobs:
           -Path target/${{ matrix.target }}/release/pdf-minimizer.exe
           -DestinationPath pdf-minimizer-${{ github.ref_name }}-${{ matrix.target }}.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: package-${{ matrix.target }}
           path: pdf-minimizer-*
@@ -73,7 +73,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: package-*
           merge-multiple: true
