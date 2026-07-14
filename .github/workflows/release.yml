@@ -88,3 +88,32 @@ jobs:
           files: pdf-minimizer-*
           body_path: release-notes.md
           generate_release_notes: true
+
+  update-tap:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: package-*
+          merge-multiple: true
+
+      - name: Push updated formula to tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$TAP_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git clone git@github.com:moujahedkhouja/homebrew-tap.git
+          bash .github/scripts/update-tap-formula.sh "${GITHUB_REF_NAME#v}" homebrew-tap/Formula/pdf-minimizer.rb
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/pdf-minimizer.rb
+          git diff --cached --quiet || git commit -m "pdf-minimizer ${GITHUB_REF_NAME}"
+          git push
