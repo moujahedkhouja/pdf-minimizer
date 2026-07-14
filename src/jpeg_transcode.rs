@@ -9,11 +9,10 @@
 //! colorspaces): coefficients and critical parameters are copied verbatim.
 
 use mozjpeg_sys::{
-    jpeg_common_struct, jpeg_compress_struct, jpeg_copy_critical_parameters,
-    jpeg_create_compress, jpeg_create_decompress, jpeg_decompress_struct,
-    jpeg_destroy_compress, jpeg_destroy_decompress, jpeg_error_mgr, jpeg_finish_compress,
-    jpeg_finish_decompress, jpeg_mem_dest, jpeg_mem_src, jpeg_read_coefficients,
-    jpeg_read_header, jpeg_std_error, jpeg_write_coefficients,
+    jpeg_common_struct, jpeg_compress_struct, jpeg_copy_critical_parameters, jpeg_create_compress,
+    jpeg_create_decompress, jpeg_decompress_struct, jpeg_destroy_compress, jpeg_destroy_decompress,
+    jpeg_error_mgr, jpeg_finish_compress, jpeg_finish_decompress, jpeg_mem_dest, jpeg_mem_src,
+    jpeg_read_coefficients, jpeg_read_header, jpeg_std_error, jpeg_write_coefficients,
 };
 use std::mem;
 use std::os::raw::c_ulong;

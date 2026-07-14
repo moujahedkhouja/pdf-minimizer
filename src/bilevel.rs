@@ -162,7 +162,10 @@ mod tests {
         // any threshold in [10, 244] separates them.
         let img = text_like_page(200);
         let thr = otsu_threshold(&img);
-        assert!((10..245).contains(&(thr as i32)), "threshold must separate the modes, got {thr}");
+        assert!(
+            (10..245).contains(&(thr as i32)),
+            "threshold must separate the modes, got {thr}"
+        );
     }
 
     #[test]

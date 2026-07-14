@@ -64,7 +64,11 @@ impl BatchStats {
         let saved = FileStats::format_bytes(self.saved);
         let avg = self.avg_reduction_percent();
         let errors = if self.error_count > 0 {
-            format!("  |  {} error{}", self.error_count, if self.error_count == 1 { "" } else { "s" })
+            format!(
+                "  |  {} error{}",
+                self.error_count,
+                if self.error_count == 1 { "" } else { "s" }
+            )
         } else {
             String::new()
         };
@@ -85,21 +89,33 @@ mod tests {
 
     #[test]
     fn file_stats_reduction_percent() {
-        let s = FileStats { original_bytes: 1000, compressed_bytes: 600 };
+        let s = FileStats {
+            original_bytes: 1000,
+            compressed_bytes: 600,
+        };
         assert!((s.reduction_percent() - 40.0).abs() < 0.01);
     }
 
     #[test]
     fn file_stats_saved_bytes() {
-        let s = FileStats { original_bytes: 1000, compressed_bytes: 600 };
+        let s = FileStats {
+            original_bytes: 1000,
+            compressed_bytes: 600,
+        };
         assert_eq!(s.saved_bytes(), 400);
     }
 
     #[test]
     fn batch_stats_aggregates() {
         let mut b = BatchStats::default();
-        b.add(FileStats { original_bytes: 1000, compressed_bytes: 600 });
-        b.add(FileStats { original_bytes: 2000, compressed_bytes: 1800 });
+        b.add(FileStats {
+            original_bytes: 1000,
+            compressed_bytes: 600,
+        });
+        b.add(FileStats {
+            original_bytes: 2000,
+            compressed_bytes: 1800,
+        });
         assert_eq!(b.total_files, 2);
         assert_eq!(b.total_saved_bytes(), 600);
     }
@@ -107,8 +123,14 @@ mod tests {
     #[test]
     fn batch_stats_avg_reduction() {
         let mut b = BatchStats::default();
-        b.add(FileStats { original_bytes: 1000, compressed_bytes: 500 });
-        b.add(FileStats { original_bytes: 1000, compressed_bytes: 750 });
+        b.add(FileStats {
+            original_bytes: 1000,
+            compressed_bytes: 500,
+        });
+        b.add(FileStats {
+            original_bytes: 1000,
+            compressed_bytes: 750,
+        });
         // avg of 50% and 25% = 37.5%
         assert!((b.avg_reduction_percent() - 37.5).abs() < 0.01);
     }
