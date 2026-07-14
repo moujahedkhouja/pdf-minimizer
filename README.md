@@ -5,9 +5,9 @@ Command-line PDF compressor written in Rust. It works on any PDF, but the tuning
 There are two modes:
 
 - Lossless (default): re-deflates Flate streams with zlib-ng, or with Zopfli if you pass `--zopfli`, and transcodes existing JPEGs at the DCT-coefficient level through mozjpeg. Pixels stay identical to the input.
-- Lossy (`--aggressive`): additionally downsamples large images, re-encodes them with mozjpeg using an automatic quality search, optimizes PNGs with oxipng, and can convert text-only pages to 1-bit CCITT G4 with `--bilevel`. Each lossy candidate has to pass an SSIM similarity check against the original, and it is only kept when it comes out smaller than the original.
+- Lossy (`--aggressive`): additionally downsamples large images, re-encodes them with mozjpeg using an automatic quality search, optimizes PNGs with oxipng, and can convert text-only pages to 1-bit CCITT G4 with `--bilevel`. Each lossy candidate has to pass an SSIM similarity check against the original, and it is only kept when it comes out smaller.
 
-## Why This Tool Was Created
+## Why this tool was created
 
 I created this tool because I have a very old scanner and the accompanying software isn't the best. I scan directly from the device to my USB stick as PDFs, but unfortunately, the files are much too large and not suitable for sending via email. For a while, I used online tools, but I didn't know what happens to my data and wanted a local, free tool. That's why I wrote this tool and thought maybe someone else could benefit from it too.
 
@@ -27,7 +27,7 @@ Compress a single file. The output is written next to the input as `scan_compres
 pdf-minimizer scan.pdf
 ```
 
-For typical scans, the preset is the easiest starting point. It downsamples to 120 DPI, caps JPEG quality at 75, and uses Zopfli:
+For typical scans, the `--recommended` preset is the easiest starting point. It downsamples to 120 DPI, caps JPEG quality at 75, and uses Zopfli:
 
 ```sh
 pdf-minimizer --recommended scan.pdf
@@ -87,6 +87,6 @@ The flags under `--aggressive` (`--max-pixels`, `--downsample-dpi`, `--smoothing
 
 ## License
 
-Licensed under either of the [Apache License 2.0](LICENSE-APACHE) or the [MIT license](LICENSE-MIT), at your option.
+Licensed under either the [Apache License 2.0](LICENSE-APACHE) or the [MIT license](LICENSE-MIT), at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
