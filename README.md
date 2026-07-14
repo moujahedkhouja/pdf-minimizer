@@ -7,6 +7,10 @@ There are two modes:
 - Lossless (default): re-deflates Flate streams with zlib-ng, or with Zopfli if you pass `--zopfli`, and transcodes existing JPEGs at the DCT-coefficient level through mozjpeg. Pixels stay identical to the input.
 - Lossy (`--aggressive`): additionally downsamples large images, re-encodes them with mozjpeg using an automatic quality search, optimizes PNGs with oxipng, and can convert text-only pages to 1-bit CCITT G4 with `--bilevel`. Each lossy candidate has to pass an SSIM similarity check against the original, and it is only kept when it comes out smaller than the original.
 
+## Why This Tool Was Created
+
+I created this tool because I have a very old scanner and the accompanying software isn't the best. I scan directly from the device to my USB stick as PDFs, but unfortunately, the files are much too large and not suitable for sending via email. For a while, I used online tools, but I didn't know what happens to my data and wanted a local, free tool. That's why I wrote this tool and thought maybe someone else could benefit from it too.
+
 ## Building
 
 ```sh
