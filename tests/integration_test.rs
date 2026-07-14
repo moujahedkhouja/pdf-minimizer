@@ -162,6 +162,61 @@ fn compress_epson_fixture_qpdf_check() {
     );
 }
 
+/// Committed synthetic scan corpus (regenerate: `cargo run --release --example
+/// gen_fixture`). Unlike the EPSON fixture this one is in git, so it MUST exist —
+/// no silent skip — and it keeps corpus regression coverage alive in CI.
+#[test]
+fn compress_synthetic_fixture_bands() {
+    let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/fixture_scan.pdf");
+    assert!(
+        std::path::Path::new(fixture).exists(),
+        "committed fixture missing — run `cargo run --release --example gen_fixture`"
+    );
+    let dir = TempDir::new().unwrap();
+    let output_path = dir.path().join("fixture_out.pdf");
+
+    let opts = pdf_minimizer::compressor::CompressOptions {
+        aggressive: false,
+        max_pixels: 1500,
+        image_quality: 75,
+        smoothing: 0,
+        downsample_dpi: None,
+        force_jpeg: false,
+        bilevel: false,
+        strip_metadata: false,
+        dry_run: false,
+        force: true,
+        zopfli: false,
+        max_decompressed_bytes: 64 * 1024 * 1024,
+    };
+    let stats =
+        pdf_minimizer::compressor::compress_file(fixture, output_path.to_str().unwrap(), &opts)
+            .unwrap();
+
+    // Lossless mode: the fixture's JPEG is deliberately unoptimized (scanner-style),
+    // so the coefficient transcode must recover at least 35%.
+    let reduction = 1.0 - stats.compressed_bytes as f64 / stats.original_bytes as f64;
+    assert!(
+        reduction >= 0.35,
+        "lossless transcode reduction regressed: {:.1}% (expected >= 35%)",
+        reduction * 100.0
+    );
+    // Output must re-parse and pass structural validation
+    lopdf::Document::load(&output_path).unwrap();
+    if let Ok(out) = std::process::Command::new("qpdf")
+        .arg("--check")
+        .arg(&output_path)
+        .output()
+    {
+        assert!(
+            out.status.success(),
+            "qpdf --check failed:\n{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
+
 #[test]
 fn compress_file_strip_metadata_succeeds() {
     let dir = TempDir::new().unwrap();
