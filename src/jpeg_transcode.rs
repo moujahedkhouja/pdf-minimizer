@@ -7,6 +7,8 @@
 //!
 //! This also works on JPEGs the pixel pipeline cannot decode (CMYK, exotic
 //! colorspaces): coefficients and critical parameters are copied verbatim.
+//!
+//! Author: Moujahed Khouja
 
 use mozjpeg_sys::{
     jpeg_common_struct, jpeg_compress_struct, jpeg_copy_critical_parameters, jpeg_create_compress,

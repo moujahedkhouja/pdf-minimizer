@@ -1,3 +1,7 @@
+//! Size accounting for single files and batch runs.
+//!
+//! Author: Moujahed Khouja
+
 /// Size stats for a single processed file.
 #[derive(Debug, Clone)]
 pub struct FileStats {

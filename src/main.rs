@@ -1,3 +1,8 @@
+//! Command-line entry point: argument parsing, batch orchestration, progress
+//! reporting, and exit-code policy.
+//!
+//! Author: Moujahed Khouja
+
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use pdf_minimizer::compressor::{compress_file, CompressOptions};

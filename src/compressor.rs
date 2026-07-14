@@ -1,3 +1,8 @@
+//! Whole-file compression pipeline: Flate stream re-deflation, dead-object
+//! pruning, metadata stripping, and atomic output replacement.
+//!
+//! Author: Moujahed Khouja
+
 use crate::image_opt::{optimize_images, ImageOptions};
 use crate::stats::FileStats;
 use flate2::{write::ZlibEncoder, Compression};

@@ -1,3 +1,9 @@
+//! Image XObject optimization: downsampling, mozjpeg re-encoding with an
+//! automatic quality search, lossless re-encoding, and SSIM-based quality
+//! gates that decide whether a lossy candidate ships.
+//!
+//! Author: Moujahed Khouja
+
 use image::{ColorType, DynamicImage, GenericImageView, ImageFormat, Pixel};
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
 use std::collections::HashSet;

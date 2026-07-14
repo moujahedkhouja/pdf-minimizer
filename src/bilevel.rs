@@ -9,6 +9,8 @@
 //!    gray source (symmetric blur measures structure at viewing scale: it forgives
 //!    antialiased-edge crushing that a viewer never perceives, while gradients and
 //!    texture destroyed by binarization stay destroyed after blurring and fail).
+//!
+//! Author: Moujahed Khouja
 
 use fax::encoder::Encoder;
 use fax::{Color, VecWriter};

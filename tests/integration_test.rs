@@ -1,3 +1,7 @@
+//! End-to-end tests running the compressor against generated PDFs.
+//!
+//! Author: Moujahed Khouja
+
 use std::fs;
 use tempfile::TempDir;
 
