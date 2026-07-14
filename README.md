@@ -1,5 +1,8 @@
 # pdf-minimizer
 
+[![CI](https://github.com/moujahedkhouja/pdf-minimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/moujahedkhouja/pdf-minimizer/actions/workflows/ci.yml)
+[![Release](https://github.com/moujahedkhouja/pdf-minimizer/actions/workflows/release.yml/badge.svg)](https://github.com/moujahedkhouja/pdf-minimizer/actions/workflows/release.yml)
+
 Command-line PDF compressor written in Rust. It works on any PDF, but the tuning is aimed at scanned documents, which usually carry oversized images and poorly compressed streams.
 
 There are two modes:
