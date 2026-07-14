@@ -4,3 +4,5 @@ docs/
 /output/
 *.pdf
 *.PDF
+.claude/
+skills-lock.json
