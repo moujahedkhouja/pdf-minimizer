@@ -80,3 +80,9 @@ The flags under `--aggressive` (`--max-pixels`, `--downsample-dpi`, `--smoothing
 ## Exit codes
 
 `0` when every input succeeded, `1` when some inputs failed, `2` when all of them failed.
+
+## License
+
+Licensed under either of the [Apache License 2.0](LICENSE-APACHE) or the [MIT license](LICENSE-MIT), at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
