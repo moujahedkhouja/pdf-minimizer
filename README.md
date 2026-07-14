@@ -14,6 +14,16 @@ There are two modes:
 
 I created this tool because I have a very old scanner and the accompanying software isn't the best. I scan directly from the device to my USB stick as PDFs, but unfortunately, the files are much too large and not suitable for sending via email. For a while, I used online tools, but I didn't know what happens to my data and wanted a local, free tool. That's why I wrote this tool and thought maybe someone else could benefit from it too.
 
+## Installing
+
+With Homebrew (macOS and Linux):
+
+```sh
+brew install moujahedkhouja/tap/pdf-minimizer
+```
+
+Or download a prebuilt binary from the [releases page](https://github.com/moujahedkhouja/pdf-minimizer/releases).
+
 ## Building
 
 ```sh
