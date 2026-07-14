@@ -47,6 +47,7 @@ class PdfMinimizer < Formula
 
   def install
     bin.install "pdf-minimizer"
+    generate_completions_from_executable(bin/"pdf-minimizer", "--completions")
   end
 
   test do

@@ -85,8 +85,18 @@ pdf-minimizer --dry-run scan.pdf
 | `-j, --jobs <N>` | 1 | Number of files processed in parallel |
 | `--dry-run` | off | Report estimated savings without writing output |
 | `--force` | off | Overwrite existing output files |
+| `--completions <SHELL>` | | Print shell completions to stdout and exit |
 
 The flags under `--aggressive` (`--max-pixels`, `--downsample-dpi`, `--smoothing`, `--force-jpeg`, `--bilevel`) have no effect without it.
+
+## Shell completions
+
+Homebrew installs completions automatically. For manual installs, generate them for your shell (bash, zsh, fish, elvish, or powershell):
+
+```sh
+pdf-minimizer --completions zsh > "${fpath[1]}/_pdf-minimizer"   # zsh
+pdf-minimizer --completions bash > ~/.local/share/bash-completion/completions/pdf-minimizer
+```
 
 ## Behavior notes
 

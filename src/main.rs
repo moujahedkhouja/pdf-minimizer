@@ -15,8 +15,12 @@ use std::sync::Mutex;
 #[command(name = "pdf-minimizer", version, about = "Compress PDF files")]
 pub struct Cli {
     /// Input PDF file(s)
-    #[arg(required = true)]
+    #[arg(required_unless_present = "completions")]
     pub input: Vec<String>,
+
+    /// Print shell completions to stdout and exit
+    #[arg(long, value_name = "SHELL", value_enum, exclusive = true)]
+    pub completions: Option<clap_complete::Shell>,
 
     /// Output path (single file only)
     #[arg(short, long, value_name = "FILE")]
@@ -194,6 +198,17 @@ fn print_file_result(input: &str, output: &str, stats: &FileStats, opts: &Compre
 
 fn main() {
     let cli = Cli::parse();
+
+    if let Some(shell) = cli.completions {
+        use clap::CommandFactory;
+        clap_complete::generate(
+            shell,
+            &mut Cli::command(),
+            "pdf-minimizer",
+            &mut std::io::stdout(),
+        );
+        return;
+    }
 
     if let Err(e) = validate_args(&cli) {
         eprintln!("Error: {}", e);
