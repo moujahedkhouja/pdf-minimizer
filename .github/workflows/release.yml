@@ -73,6 +73,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+
+      - name: Render release notes from template
+        run: sed "s/{VERSION}/${GITHUB_REF_NAME}/g" .github/release-notes-template.md > release-notes.md
+
       - uses: actions/download-artifact@v5
         with:
           pattern: package-*
@@ -81,4 +86,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: pdf-minimizer-*
+          body_path: release-notes.md
           generate_release_notes: true
