@@ -189,12 +189,9 @@ fn compress_synthetic_fixture_bands() {
         zopfli: false,
         max_decompressed_bytes: 64 * 1024 * 1024,
     };
-    let stats = pdf_minimizer::compressor::compress_file(
-        fixture,
-        output_path.to_str().unwrap(),
-        &opts,
-    )
-    .unwrap();
+    let stats =
+        pdf_minimizer::compressor::compress_file(fixture, output_path.to_str().unwrap(), &opts)
+            .unwrap();
 
     // Lossless mode: the fixture's JPEG is deliberately unoptimized (scanner-style),
     // so the coefficient transcode must recover at least 35%.
