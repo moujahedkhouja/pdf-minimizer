@@ -4,6 +4,11 @@ all-features = true
 [advisories]
 version = 2
 yanked = "warn"
+ignore = [
+    # chrono is unmaintained (no fixed release exists). Pulled in only
+    # transitively by lopdf 0.44; not a vulnerability. Revisit when lopdf drops it.
+    { id = "RUSTSEC-2026-0543", reason = "unmaintained-only, transitive via lopdf, no upgrade available" },
+]
 
 [licenses]
 version = 2

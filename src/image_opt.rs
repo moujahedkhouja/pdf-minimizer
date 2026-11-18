@@ -100,6 +100,7 @@ fn decode_image_bytes(
     width: u32,
     height: u32,
     stream: &Stream,
+    components: Option<u8>,
     is_jpeg: bool,
     max_decompressed_bytes: usize,
 ) -> Result<DynamicImage, ()> {
@@ -133,18 +134,13 @@ fn decode_image_bytes(
         return Err(());
     }
 
-    let cs = stream
-        .dict
-        .get(b"ColorSpace")
-        .ok()
-        .and_then(|o| o.as_name().ok())
-        .unwrap_or(b"DeviceRGB");
-
-    match cs {
-        b"DeviceRGB" | b"RGB" => image::RgbImage::from_raw(width, height, raw.to_vec())
+    // `components` comes from the caller's color-space allowlist (1 = gray, 3 = RGB);
+    // an absent /ColorSpace keeps the historical RGB interpretation.
+    match components.unwrap_or(3) {
+        3 => image::RgbImage::from_raw(width, height, raw.to_vec())
             .map(DynamicImage::ImageRgb8)
             .ok_or(()),
-        b"DeviceGray" | b"Grayscale" => image::GrayImage::from_raw(width, height, raw.to_vec())
+        1 => image::GrayImage::from_raw(width, height, raw.to_vec())
             .map(DynamicImage::ImageLuma8)
             .ok_or(()),
         _ => Err(()),
@@ -439,12 +435,23 @@ pub fn quality_scores(a: &DynamicImage, b: &DynamicImage) -> (f64, f64) {
 /// (skipped, gate-rejected, or undecodable), a lossless coefficient-domain transcode
 /// (optimized Huffman tables, stripped EXIF) is tried instead — it renders
 /// bit-identically, so no quality gate applies, only the size guard.
+///
+/// Without a document, an indirect `/ColorSpace` cannot be resolved, so such images
+/// are only transcoded losslessly; [`optimize_images`] resolves them.
 #[allow(clippy::result_unit_err)]
 pub fn optimize_image_stream(
     stream: &Stream,
     opts: &ImageOptions,
 ) -> Result<Option<(Vec<u8>, Dictionary)>, ()> {
-    let result = optimize_image_stream_lossy(stream, opts);
+    optimize_image_stream_in(stream, opts, None)
+}
+
+fn optimize_image_stream_in(
+    stream: &Stream,
+    opts: &ImageOptions,
+    doc: Option<&Document>,
+) -> Result<Option<(Vec<u8>, Dictionary)>, ()> {
+    let result = optimize_image_stream_lossy(stream, opts, doc);
     if matches!(result, Ok(Some(_))) {
         return result;
     }
@@ -467,10 +474,79 @@ pub fn optimize_image_stream(
     result
 }
 
+/// Resolve an indirect reference when a document is available.
+fn resolve<'a>(obj: &'a Object, doc: Option<&'a Document>) -> Option<&'a Object> {
+    match obj {
+        Object::Reference(id) => doc?.get_object(*id).ok(),
+        other => Some(other),
+    }
+}
+
+/// Component count (1 or 3) of an image color space whose samples the pixel
+/// pipeline reproduces faithfully as DeviceGray/DeviceRGB; `None` for everything
+/// else (DeviceCMYK, ICCBased N=4, Lab, Indexed, Separation, DeviceN, unresolvable).
+///
+/// The decoder and the encoders only know gray and RGB. Any other color model
+/// would be re-interpreted — e.g. Adobe CMYK JPEGs store inverted samples that the
+/// `image` decoder converts to near-black RGB — and then shipped as DeviceRGB.
+fn gray_or_rgb_components(cs: &Object, doc: Option<&Document>) -> Option<u8> {
+    let by_family = |name: &[u8]| match name {
+        b"DeviceGray" | b"G" | b"CalGray" => Some(1),
+        b"DeviceRGB" | b"RGB" | b"CalRGB" => Some(3),
+        _ => None,
+    };
+    match resolve(cs, doc)? {
+        Object::Name(name) => by_family(name),
+        Object::Array(arr) => match arr.first()?.as_name().ok()? {
+            b"ICCBased" => {
+                let icc = resolve(arr.get(1)?, doc)?.as_stream().ok()?;
+                match resolve(icc.dict.get(b"N").ok()?, doc)?.as_i64().ok()? {
+                    n @ (1 | 3) => Some(n as u8),
+                    _ => None,
+                }
+            }
+            family @ (b"CalGray" | b"CalRGB") => by_family(family),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Number of components declared in a JPEG's frame header (SOFn), if parseable.
+fn jpeg_component_count(data: &[u8]) -> Option<u8> {
+    if data.get(..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut i = 2;
+    loop {
+        if *data.get(i)? != 0xFF {
+            return None;
+        }
+        let marker = *data.get(i + 1)?;
+        match marker {
+            0xFF => i += 1, // fill byte
+            0x01 | 0xD0..=0xD7 => i += 2,
+            _ => {
+                let len = u16::from_be_bytes([*data.get(i + 2)?, *data.get(i + 3)?]) as usize;
+                let is_sof = matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC);
+                if is_sof {
+                    // length(2) precision(1) height(2) width(2) components(1)
+                    return data.get(i + 9).copied();
+                }
+                if marker == 0xDA || len < 2 {
+                    return None;
+                }
+                i += 2 + len;
+            }
+        }
+    }
+}
+
 #[allow(clippy::result_unit_err)]
 fn optimize_image_stream_lossy(
     stream: &Stream,
     opts: &ImageOptions,
+    doc: Option<&Document>,
 ) -> Result<Option<(Vec<u8>, Dictionary)>, ()> {
     let width = stream
         .dict
@@ -512,11 +588,31 @@ fn optimize_image_stream_lossy(
         return Ok(None);
     }
 
+    // Only gray and RGB sources survive a decode/re-encode round trip; everything
+    // else (CMYK, Lab, Indexed, Separation, DeviceN, ...) is left to the lossless
+    // transcode. An absent /ColorSpace keeps the historical RGB/container handling.
+    let components = match stream.dict.get(b"ColorSpace") {
+        Ok(cs) => match gray_or_rgb_components(cs, doc) {
+            Some(n) => Some(n),
+            None => return Ok(None),
+        },
+        Err(_) => None,
+    };
+
     // Recognize both /DCTDecode and single-element [/DCTDecode] filter forms
     let is_jpeg = stream
         .filters()
         .map(|f| f == vec![b"DCTDecode" as &[u8]])
         .unwrap_or(false);
+
+    // The JPEG itself must agree: a 4-component (CMYK/YCCK) frame cannot be
+    // reproduced in gray/RGB, whatever the dictionary claims.
+    if is_jpeg {
+        match jpeg_component_count(&stream.content) {
+            Some(n @ (1 | 3)) if components.map_or(true, |c| c == n) => {}
+            _ => return Ok(None),
+        }
+    }
 
     let has_filter = stream.dict.get(b"Filter").is_ok();
 
@@ -547,6 +643,7 @@ fn optimize_image_stream_lossy(
         width,
         height,
         stream,
+        components,
         is_jpeg,
         opts.max_decompressed_bytes,
     )?;
@@ -871,7 +968,7 @@ pub fn optimize_images(doc: &mut Document, opts: &ImageOptions, input_path: &str
 
     for id in image_ids {
         let result = match doc.objects.get(&id) {
-            Some(Object::Stream(stream)) => optimize_image_stream(stream, opts),
+            Some(Object::Stream(stream)) => optimize_image_stream_in(stream, opts, Some(doc)),
             _ => continue,
         };
         match result {
@@ -1793,5 +1890,230 @@ mod tests {
                 .expect("encoded bytes must be a valid zlib stream");
             assert!(!out.is_empty(), "decompressed output must not be empty");
         }
+    }
+
+    /// Recommended preset values (`--recommended` expands to these in main.rs).
+    fn recommended_opts() -> ImageOptions {
+        ImageOptions {
+            image_quality: 75,
+            downsample_dpi: Some(120),
+            force_jpeg: true,
+            ..default_opts()
+        }
+    }
+
+    /// Adobe-style CMYK JPEG (APP14 marker, YCCK transform) as Photoshop and many
+    /// scanner drivers write it: samples are stored *inverted*, so 255 means no ink.
+    /// Paper is white, with a black "text" bar and a cyan block.
+    fn adobe_cmyk_jpeg(width: u32, height: u32) -> Vec<u8> {
+        let mut px = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                let ink: [u8; 4] = if y > height / 4 && y < height / 4 + 12 && x > 20 {
+                    [0, 0, 0, 100] // black bar (K ink)
+                } else if x < width / 4 && y > height / 2 {
+                    [100, 0, 0, 0] // cyan block
+                } else {
+                    [0, 0, 0, 0] // paper
+                };
+                px.extend(ink.iter().map(|&v| 255 - (v as u32 * 255 / 100) as u8));
+            }
+        }
+        let mut comp = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_CMYK);
+        comp.set_color_space(mozjpeg::ColorSpace::JCS_YCCK);
+        comp.set_size(width as usize, height as usize);
+        comp.set_quality(95.0);
+        let mut started = comp.start_compress(Vec::new()).unwrap();
+        started.write_scanlines(&px).unwrap();
+        let bytes = started.finish().unwrap();
+        assert!(bytes.windows(2).any(|w| w == [0xFF, 0xEE]), "APP14 missing");
+        bytes
+    }
+
+    fn image_stream(width: u32, height: u32, filter: &str, cs: Object, data: Vec<u8>) -> Stream {
+        let mut dict = Dictionary::new();
+        dict.set("Type", Object::Name(b"XObject".to_vec()));
+        dict.set("Subtype", Object::Name(b"Image".to_vec()));
+        dict.set("Width", Object::Integer(width as i64));
+        dict.set("Height", Object::Integer(height as i64));
+        dict.set("BitsPerComponent", Object::Integer(8));
+        dict.set("ColorSpace", cs);
+        dict.set("Filter", Object::Name(filter.as_bytes().to_vec()));
+        dict.set("Length", Object::Integer(data.len() as i64));
+        Stream::new(dict, data)
+    }
+
+    /// The only acceptable outcomes for an image whose color model the pixel
+    /// pipeline cannot represent: untouched, or a coefficient-level transcode that
+    /// keeps filter and color space. Anything else re-interprets the samples.
+    fn assert_color_model_preserved(
+        label: &str,
+        input: &Dictionary,
+        result: Result<Option<(Vec<u8>, Dictionary)>, ()>,
+    ) {
+        match result {
+            Ok(None) => {}
+            Ok(Some((_, out))) => {
+                assert_eq!(
+                    out.get(b"ColorSpace").ok(),
+                    input.get(b"ColorSpace").ok(),
+                    "{label}: color space was rewritten"
+                );
+                assert_eq!(
+                    out.get(b"Filter").ok(),
+                    input.get(b"Filter").ok(),
+                    "{label}: stream was re-encoded through the pixel pipeline"
+                );
+            }
+            Err(()) => panic!("{label}: expected a clean skip, got Err"),
+        }
+    }
+
+    /// Regression: `--recommended` turned Adobe CMYK JPEGs (a scanned marriage
+    /// certificate) into near-black DeviceRGB images. The `image` decoder does not
+    /// undo Adobe's inverted CMYK, and the preset skips the SSIM gate.
+    #[test]
+    fn adobe_cmyk_jpeg_is_never_reencoded_through_pixel_pipeline() {
+        let jpeg = adobe_cmyk_jpeg(600, 400);
+        let variants = [
+            ("recommended", recommended_opts()),
+            (
+                "aggressive force_jpeg",
+                ImageOptions {
+                    force_jpeg: true,
+                    ..default_opts()
+                },
+            ),
+            (
+                "aggressive downsample",
+                ImageOptions {
+                    max_pixels: 300,
+                    ..default_opts()
+                },
+            ),
+            (
+                "recommended bilevel",
+                ImageOptions {
+                    bilevel: true,
+                    ..recommended_opts()
+                },
+            ),
+        ];
+        for (label, opts) in variants {
+            let stream = image_stream(
+                600,
+                400,
+                "DCTDecode",
+                Object::Name(b"DeviceCMYK".to_vec()),
+                jpeg.clone(),
+            );
+            let result = optimize_image_stream(&stream, &opts);
+            assert_color_model_preserved(label, &stream.dict, result);
+        }
+    }
+
+    /// Same trait, resolved through the document: `[/ICCBased <</N 4>>]` CMYK JPEG.
+    #[test]
+    fn icc_cmyk_jpeg_is_never_reencoded_through_pixel_pipeline() {
+        let mut doc = Document::with_version("1.5");
+        let mut icc = Dictionary::new();
+        icc.set("N", Object::Integer(4));
+        let icc_id = doc.add_object(Stream::new(icc, vec![0u8; 16]));
+        let cs = Object::Array(vec![
+            Object::Name(b"ICCBased".to_vec()),
+            Object::Reference(icc_id),
+        ]);
+        let stream = image_stream(600, 400, "DCTDecode", cs, adobe_cmyk_jpeg(600, 400));
+        let input = stream.dict.clone();
+        let id = doc.add_object(stream);
+        optimize_images(&mut doc, &recommended_opts(), "test");
+        let out = doc.get_object(id).unwrap().as_stream().unwrap();
+        assert_color_model_preserved("ICCBased N=4", &input, Ok(Some((vec![], out.dict.clone()))));
+    }
+
+    /// Sibling class: three-component samples in a color space that is not RGB.
+    /// The raw-pixel fallback used to read any array color space as DeviceRGB.
+    #[test]
+    fn non_rgb_three_component_images_are_not_reinterpreted_as_rgb() {
+        use flate2::{write::ZlibEncoder, Compression};
+        use std::io::Write;
+        let (w, h) = (256u32, 256u32);
+        let mut raw = Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let n = ((x.wrapping_mul(7919) ^ y.wrapping_mul(104_729)) % 13) as u8;
+                raw.extend([
+                    (x as u8).wrapping_add(n),
+                    (y as u8).wrapping_add(n),
+                    128 + n,
+                ]);
+            }
+        }
+        let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(&raw).unwrap();
+        let flate = enc.finish().unwrap();
+
+        let lab = Object::Array(vec![Object::Name(b"Lab".to_vec()), {
+            let mut d = Dictionary::new();
+            d.set(
+                "WhitePoint",
+                Object::Array(vec![0.9505.into(), 1.0.into(), 1.089.into()]),
+            );
+            Object::Dictionary(d)
+        }]);
+        let device_n = Object::Array(vec![
+            Object::Name(b"DeviceN".to_vec()),
+            Object::Array(vec![
+                Object::Name(b"Spot1".to_vec()),
+                Object::Name(b"Spot2".to_vec()),
+                Object::Name(b"Spot3".to_vec()),
+            ]),
+            Object::Name(b"DeviceCMYK".to_vec()),
+            Object::Null,
+        ]);
+        for (label, cs) in [("Lab", lab), ("DeviceN", device_n)] {
+            for (mode, opts) in [
+                ("recommended", recommended_opts()),
+                (
+                    "force_jpeg",
+                    ImageOptions {
+                        force_jpeg: true,
+                        ..default_opts()
+                    },
+                ),
+            ] {
+                let stream = image_stream(w, h, "FlateDecode", cs.clone(), flate.clone());
+                let result = optimize_image_stream(&stream, &opts);
+                assert_color_model_preserved(&format!("{label} {mode}"), &stream.dict, result);
+            }
+        }
+    }
+
+    /// The guard must not over-block: an ICC-tagged RGB scan (N=3) referenced
+    /// indirectly is still eligible for lossy re-encoding.
+    #[test]
+    fn icc_rgb_image_remains_eligible_for_reencoding() {
+        let (w, h) = (600u32, 400u32);
+        let mut img = image::RgbImage::new(w, h);
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            *p = image::Rgb([(x % 256) as u8, (y % 256) as u8, 200]);
+        }
+        let jpeg = encode_jpeg_mozjpeg(&DynamicImage::ImageRgb8(img), 100).unwrap();
+        let mut doc = Document::with_version("1.5");
+        let mut icc = Dictionary::new();
+        icc.set("N", Object::Integer(3));
+        let icc_id = doc.add_object(Stream::new(icc, vec![0u8; 16]));
+        let cs = Object::Array(vec![
+            Object::Name(b"ICCBased".to_vec()),
+            Object::Reference(icc_id),
+        ]);
+        let len = jpeg.len();
+        let id = doc.add_object(image_stream(w, h, "DCTDecode", cs, jpeg));
+        optimize_images(&mut doc, &recommended_opts(), "test");
+        let out = doc.get_object(id).unwrap().as_stream().unwrap();
+        assert!(
+            out.content.len() < len,
+            "ICC RGB JPEG should still be re-encoded by the preset"
+        );
     }
 }
